@@ -1,0 +1,74 @@
+name: Lab2 Full Workflow
+
+on: workflow_dispatch
+
+env:
+  AZURERG: ${{ secrets.AZURE_RG }}
+  AZUREREGION: ${{ secrets.AZURE_REGION }}
+  AZURESUBSCRIPTION: ${{ secrets.AZURE_SUBSCRIPTION }}
+  AZURECREDENTIALS: ${{ secrets.AZURE_CREDENTIALS }}
+
+jobs:
+
+  create-azure-rg:
+    runs-on: ubuntu-latest
+    steps:
+      # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
+      - uses: actions/checkout@v3
+      
+      - name: Azure Login
+        uses: azure/login@v1
+        with:
+          creds: ${{ env.AZURECREDENTIALS }}
+          
+      - name: Azure CLI script
+        uses: azure/CLI@v1
+        with:
+          azcliversion: 2.30.0 # Optional
+          inlineScript: |
+            az group create --location $AZUREREGION -n $AZURERG
+  arm-template-deploy:
+    if: ${{ success() }}
+    needs: create-azure-rg
+    runs-on: ubuntu-latest
+    steps:
+      # Checkout code
+    - uses: actions/checkout@main
+
+      # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: ${{ env.AZURECREDENTIALS }}
+
+      # Deploy ARM template
+    - name: Run ARM deploy
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ env.AZURESUBSCRIPTION }}
+        resourceGroupName: ${{ env.AZURERG }}
+        template: ./arm/lab2/azure-deploy-storage.json
+        parameters: storageAccounts_name=jarg
+        
+  deploy-aks:
+    if: ${{ success }}
+    needs: create-azure-rg
+    runs-on: ubuntu-latest
+    steps:
+
+      # Checkout code
+    - uses: actions/checkout@main
+
+      # Log into Azure
+    - uses: azure/login@v1
+      with:
+        creds: ${{ env.AZURECREDENTIALS }}
+
+      # Deploy ARM template
+    - name: Deploy AKS
+      uses: azure/arm-deploy@v1
+      with:
+        subscriptionId: ${{ env.AZURESUBSCRIPTION }}
+        resourceGroupName: ${{ env.AZURERG }}
+        template: ./arm/aks/azuredeploy.json
+        # parameters: storageAccounts_name=oamx
+        parameters: ./arm/aks/azuredeploy.parameters.json 
